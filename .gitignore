@@ -1,0 +1,37 @@
+# ===============================
+# Python / VS Code
+# ===============================
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+.vscode/
+
+# ===============================
+# Virtual environments
+# ===============================
+penv/
+venv/
+.env/
+
+# ===============================
+# Data files (DO NOT TRACK)
+# ===============================
+data/raw/
+data/cleaned/
+data/processed/
+*.csv
+*.xlsx
+
+# ===============================
+# OS / system junk
+# ===============================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===============================
+# Jupyter / IPython internals
+# ===============================
+ipykernel_launcher.py
+disutils-precedence.pth
