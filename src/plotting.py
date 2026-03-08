@@ -2,16 +2,21 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.express as px
+import matplotlib.dates as mdates
 
 
 
 def plot_actual_vs_predicted(train_df, val_df, level_pred, commodity):
-    # actual vs predicted plot per commodity
+
     actuals = pd.concat(
         [train_df[["date", "target"]], val_df[["date", "target"]]]
     )
 
-    actuals_monthly = actuals.groupby("date")["target"].sum().reset_index()
+    actuals_monthly = (
+        actuals.groupby("date")["target"]
+        .sum()
+        .reset_index()
+    )
 
     preds_monthly = (
         val_df.assign(predicted=level_pred)
@@ -42,6 +47,10 @@ def plot_actual_vs_predicted(train_df, val_df, level_pred, commodity):
         label="Forecast Start",
     )
 
+    # 🔹 FORMAT X AXIS
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b, %Y'))
+    plt.xticks(rotation=90)
+
     ax.set_title(f"{commodity.capitalize()} — Actual vs Predicted")
     ax.set_xlabel("Date")
     ax.set_ylabel("Total Allocated Quantity")
@@ -49,4 +58,5 @@ def plot_actual_vs_predicted(train_df, val_df, level_pred, commodity):
     ax.grid(True)
 
     return fig
+
 
