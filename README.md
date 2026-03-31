@@ -1,134 +1,146 @@
-# 📦 PDS Foodgrain (Rice & Wheat) Forecasting — India
+📊 India PDS Foodgrain Allocation Forecasting
 
-This project builds an end-to-end data science and machine learning pipeline to analyse and forecast rice and wheat allocations under India’s Public Distribution System (PDS) using real-world government data.
+A complete end-to-end data science project analyzing and forecasting Public Distribution System (PDS) foodgrain allocations (Rice & Wheat) across Indian states.
 
-It combines:
-- rigorous data cleaning and validation,
-- anomaly-aware feature engineering,
-- leakage-safe time-series modeling,
-- delta-based forecasting,
-- and an interactive Streamlit dashboard.
+🚀 Project Overview
 
-## 🎯 Problem Context
+This project builds a state-level forecasting system for foodgrain allocation using:
 
-India’s PDS allocation data presents several real-world challenges:
+Historical allocation data
+Time-series feature engineering
+Machine learning (Random Forest)
+Interactive Streamlit dashboard
 
-- reporting delays and administrative shocks (e.g. COVID-era under-reporting),
-- incomplete state-level panels,
-- strong regional heterogeneity between rice and wheat,
-- non-stationary allocation levels.
-- Naïve forecasting approaches fail under these conditions.
+🎯 Objectives
+Analyze national and state-level allocation trends
+Detect anomalies in reporting and distribution
+Forecast future allocations (3-month horizon)
+Build a production-ready data pipeline and dashboard
 
-This project addresses these issues using careful data diagnostics, explicit anomaly handling, and robust ML design choices.
-
-## 🧠 Methodology Overview
-
-### Data
-
-- Monthly, state-level allocation data
-- Commodities: Rice and Wheat
-- Period: ~2018–2021
-- Source: Government of India administrative datasets
-
-### Key Modeling Decisions
-
-- Forecast horizon: 3 months ahead
-- Target formulation: Forecasting change in allocation (delta_target) instead of raw levels
-- Models: Random Forest Regressor
-- Validation: Time-based, leakage-safe splits
-- Anomaly handling: Explicit flags; excluded from training
-- Panel completeness: Commodity-specific thresholds (rice vs wheat)
-
-## 📊 Streamlit Dashboard
-
-The project includes an interactive Streamlit application with two main sections:
-
-### 1️⃣ Diagnostics
-
-- National-level allocation trends
-- Anomaly detection and visualization
-- Zoomed views of reporting shock periods
-
-### 2️⃣ Forecasting
-
-- User-selected forecast cutoff (month & year)
-- Automatic train–validation split (no hard-coding)
-- Separate rice and wheat models
-- Normalized evaluation metrics:
-- R²
-- Normalized MAE
-- Normalized RMSE
-- Actual vs predicted visualizations
-
-## 🗂️ Project Structure
-
-PDS_FOODGRAIN_FORECASTING/
+🧱 Project Structure
+pds_foodgrain_forecasting/
 │
 ├── data/
-│   ├── raw/                # Raw downloaded data (not tracked)
-│   ├── cleaned/            # Cleaned intermediate data (not tracked)
-│   └── processed/          # Feature-engineered data (not tracked)
+│   ├── raw/
+│   ├── cleaned/
+│   └── preprocessed/
 │
 ├── notebooks/
 │   ├── 01_primary_data_cleaning.ipynb
-│   ├── 02_supplementary_data_cleaning.ipynb
-│   ├── 03_eda_visualisation.ipynb
-│   ├── 04_feature_engineering.ipynb
-│   ├── 05_ml_modeling.ipynb
-│   ├── 06_model_improvement.ipynb
-│   ├── 07_alternative_modeling_strategies.ipynb
-│   └── 08_parameterised_delta_forecasting_engine.ipynb
+│   ├── 02_eda_visualisation.ipynb
+│   ├── 03_feature_engineering.ipynb
+│   ├── 04_ml_implementation.ipynb
+│   └── 05_parameterised_modeling_engine.ipynb
 │
 ├── src/
-│   ├── diagnostics.py      # National trends & anomaly diagnostics
-│   ├── forecasting.py      # ML pipelines, splits, evaluation
-│   ├── plotting.py         # Forecast visualisations
-│   ├── eda_utils.py        # EDA helper functions
-│   ├── date_utils.py       # Date & time utilities
-│   ├── geo_utils.py        # State/region helpers
-│   └── text_cleaning.py    # Text standardisation utilities
+│   ├── eda_utils.py
+│   ├── preprocessing.py
+│   ├── forecasting.py
+│   ├── plotting.py
+│   ├── geo_utils.py
+│   ├── text_cleaning.py
+│   └── date_utils.py
 │
-├── streamlit_app/
-│   └── app.py              # Streamlit application entry point
-│
-├── powerbi/                # Power BI exploratory dashboards
-│
-├── requirements.txt
+├── app.py
 └── README.md
 
-- Note: Data files are intentionally excluded from version control due to size and licensing constraints.
-- All preprocessing and feature engineering steps are fully reproducible using the notebooks.
+🔄 Workflow
+1. Data Cleaning
+Standardized column names and text fields
+Mapped state names to codes
+Created consistent monthly time index
+2. Exploratory Data Analysis (EDA)
+Commodity dominance (Rice vs Wheat)
+Year-wise allocation trends
+State-level allocation patterns
+Anomaly detection:
+Missing reporting states
+Sudden allocation changes
+3. Feature Engineering
+Lag features: lag_1, lag_2, lag_3, lag_6, lag_9, lag_12
+Rolling statistics:
+rolling_mean_3, rolling_mean_6
+rolling_std_3
+Time-series safe preprocessing:
+Full timeline creation
+Forward/backward fill
+Outlier clipping
+4. Machine Learning
+Model: Random Forest Regressor
+State + commodity specific training
+Recursive forecasting for 3 months
+5. Streamlit Dashboard
 
-## ⚙️ Environment Setup
+📌 Features:
+National Analysis
+Commodity dominance
+Year-wise allocation
+Trend + anomaly visualization
+State Analysis
+State selector
+Allocation trends
+Anomaly reporting
+Forecasting
+Select state & commodity
+Choose forecast cutoff date
+3-month prediction
+Model performance metrics (MAPE, R²)
+Visualization of predictions vs actuals
 
-python -m venv penv
-.\penv\Scripts\Activate.ps1
+🧠 Key Design Decisions
+Lag-based features → captures temporal dependencies
+No imputation of anomalies → preserves real-world signals
+Recursive forecasting → realistic multi-step prediction
+
+📈 Model Features
+[
+ 'lag_1', 'lag_2', 'lag_3',
+ 'lag_6', 'lag_9', 'lag_12',
+ 'rolling_mean_3', 'rolling_mean_6',
+ 'rolling_std_3'
+]
+
+⚠️ Constraints & Validations
+Minimum 12 months history required (lag_12 constraint)
+Forecast only allowed for valid cutoff dates
+Warning triggered for high volatility regions
+
+🛠️ Tech Stack
+Python
+Pandas, NumPy
+Scikit-learn
+Matplotlib
+Streamlit
+
+▶️ How to Run
+1. Install dependencies
 pip install -r requirements.txt
+2. Run Streamlit app
+streamlit run app.py
 
-## ▶️ Run the Streamlit App
-- From the project root:
-streamlit run streamlit_app\app.py
+📊 Example Use Case
+Select: Kerala (KL) → Rice
+Choose cutoff: Jan 2021
+Get:
+Feb, Mar, Apr predictions
+Model accuracy metrics
+Visual trend comparison
 
-## 📈 Key Insights
+📌 Key Learnings
+Handling panel time-series data
+Preventing data leakage in lag features
+Designing modular ML pipelines
+Building production-ready dashboards
+Managing real-world messy datasets
 
-- Forecasting deltas is more stable than forecasting absolute levels
-- Leakage prevention materially affects model evaluation
-- Commodity-specific modeling is essential for PDS data
-- Data diagnostics and validation matter more than complex models
+🔮 Future Improvements
+Add seasonality features (month encoding)
+Try advanced models (XGBoost, LSTM)
+Add district-level granularity (optional)
+Improve anomaly detection (statistical methods)
 
-## 🚀 Possible Extensions
-
-- Confidence intervals for forecasts
-- Comparison with linear / boosting models
-- Automated retraining pipelines
-- Public deployment via Streamlit Cloud
-
-## 📜 Disclaimer
-
-This project is for educational and analytical purposes only.
-It does not represent official forecasts or policy recommendations.
-
-## 🧑‍💻 Author
+👤 Author
 
 Sreelakshmi S
-(Data Science & Machine Learning Project)
+Aspiring Data Analyst | Data Scientist
+Focused on building real-world, production-ready data projects

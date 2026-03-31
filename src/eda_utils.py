@@ -11,551 +11,686 @@ import numpy as np
 
 import matplotlib.dates as mdates
 import matplotlib.ticker as mticker
+from datetime import datetime
+import plotly.graph_objects as go
 
 
 
 # -------------------------------------------------------------------
-# NATIONAL-LEVEL AGGREGATION
+# YEAR-WISE NATIONAL ALLOCATION (STACKED BAR)
 # -------------------------------------------------------------------
 
-def get_national_monthly_allocation(df):
+def plot_yearly_national_allocation(national_alloc_df):
+
     """
-    Aggregates national monthly allocation by commodity.
+    Plots year-wise total allocation split by commodity
+    using a stacked bar chart.
 
     Parameters
     ----------
-    df : pd.DataFrame
-        Cleaned dataset with columns:
-        - date (month start)
-        - commodity ('rice', 'wheat')
-        - total_allocated_qty
+    national_alloc_df : pd.DataFrame
+        ['date','commodity','total_allocated_qty']
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+    """
+
+    df = national_alloc_df.copy()
+
+    # -------------------------------------------------
+    # Extract year
+    # -------------------------------------------------
+
+    df["year"] = df["date"].dt.year
+
+    # -------------------------------------------------
+    # Aggregate by year and commodity
+    # -------------------------------------------------
+
+    yearly_df = (
+        df.groupby(["year", "commodity"])["total_allocated_qty"]
+        .sum()
+        .reset_index()
+    )
+
+    # -------------------------------------------------
+    # Pivot for stacked bar
+    # -------------------------------------------------
+
+    pivot_df = (
+        yearly_df.pivot(index="year", columns="commodity", values="total_allocated_qty")
+        .fillna(0)
+    )
+
+    pivot_df.columns = [str(c).strip().title() for c in pivot_df.columns]
+
+    # Ensure consistent order
+    pivot_df = pivot_df[["Rice", "Wheat"]]
+
+    # -------------------------------------------------
+    # Plot
+    # -------------------------------------------------
+
+    fig, ax = plt.subplots(figsize=(10,5))
+
+    ax.bar(
+        pivot_df.index,
+        pivot_df["Rice"],
+        label="Rice",
+        color="#8c7a3b"
+    )
+
+    ax.bar(
+        pivot_df.index,
+        pivot_df["Wheat"],
+        bottom=pivot_df["Rice"],
+        label="Wheat",
+        color="#f2c94c"
+    )
+
+    # -------------------------------------------------
+    # Annotate total allocation above bars
+    # -------------------------------------------------
+
+    for year in pivot_df.index:
+        total = pivot_df.loc[year].sum()
+
+        ax.text(
+            year,
+            total * 1.01,
+            f"{total/1e6:.1f}M",
+            ha="center",
+            va="bottom",
+            fontsize=9
+        )
+
+    # -------------------------------------------------
+    # Styling
+    # -------------------------------------------------
+
+    ax.set_title("Year-wise National Allocation (Rice vs Wheat)")
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Total Allocation (MT)")
+
+    ax.ticklabel_format(style="plain", axis="y")
+    ax.yaxis.set_major_formatter(mticker.StrMethodFormatter("{x:,.0f}"))
+
+    ax.legend()
+
+    ax.grid(axis="y")
+
+    plt.tight_layout()
+
+    return fig
+
+
+# -------------------------------------------------------------------
+# MERGE CONTIGUOUS ANOMALY MONTHS
+# -------------------------------------------------------------------
+
+def get_contiguous_anomaly_windows(anomaly_dates):
+
+    """
+    Converts individual anomaly months into continuous
+    anomaly windows.
+
+    Returns
+    -------
+    List of tuples:
+    [(window_start, window_end), ...]
+    """
+
+    if len(anomaly_dates) == 0:
+        return []
+
+    anomaly_dates = sorted(pd.to_datetime(anomaly_dates))
+    windows = []
+
+    start = anomaly_dates[0]
+    end = anomaly_dates[0]
+
+    for current in anomaly_dates[1:]:
+
+        # If next anomaly is consecutive month
+        if current == end + pd.DateOffset(months=1):
+            end = current
+        else:
+            windows.append((start, end))
+            start = current
+            end = current
+
+    windows.append((start, end))
+    return windows
+
+# -------------------------------------------------------------------
+# ENHANCED NATIONAL TREND WITH REPORTING-BASED ANOMALY WINDOWS
+# -------------------------------------------------------------------
+
+def plot_enhanced_national_trends(national_alloc_df, state_threshold=24):
+
+    df = national_alloc_df.copy()
+    df = df.sort_values("date")
+
+    # -------------------------------------------------
+    # Pivot commodity to get rice and wheat series
+    # -------------------------------------------------
+
+    pivot_df = (
+        df.pivot_table(
+            index="date",
+            columns="commodity",
+            values="total_allocated_qty",
+            aggfunc="sum"
+        )
+        .reset_index()
+    )
+
+    pivot_df.columns.name = None
+
+    # Standardize column names (lowercase)
+    pivot_df.columns = [str(col).lower() for col in pivot_df.columns]
+
+    # -------------------------------------------------
+    # Compute states reporting per date
+    # -------------------------------------------------
+
+    states_df = (
+        df.groupby("date")["states_reporting"]
+        .max()
+        .reset_index()
+    )
+
+    pivot_df = pivot_df.merge(states_df, on="date", how="left")
+
+    # -------------------------------------------------
+    # Detect anomaly windows
+    # -------------------------------------------------
+
+    anomaly_mask = pivot_df["states_reporting"] < state_threshold
+    anomaly_dates = pivot_df.loc[anomaly_mask, "date"].tolist()
+
+    # -------------------------------------------------
+    # Plot
+    # -------------------------------------------------
+
+    fig, ax = plt.subplots(figsize=(12,5))
+
+    ax.plot(
+        pivot_df["date"],
+        pivot_df["rice"],
+        color="#8c7a3b",
+        label="Rice"
+    )
+
+    ax.plot(
+        pivot_df["date"],
+        pivot_df["wheat"],
+        color="#f2c94c",
+        label="Wheat"
+    )
+
+    # -------------------------------------------------
+    # Trendlines
+    # -------------------------------------------------
+
+    x_numeric = np.arange(len(pivot_df))
+
+    coef_rice = np.polyfit(x_numeric, pivot_df["rice"], 1)
+    trend_rice = np.poly1d(coef_rice)
+
+    coef_wheat = np.polyfit(x_numeric, pivot_df["wheat"], 1)
+    trend_wheat = np.poly1d(coef_wheat)
+
+    ax.plot(
+        pivot_df["date"],
+        trend_rice(x_numeric),
+        linestyle=":",
+        color="#8c7a3b",
+        linewidth=2,
+        label="Rice Trend"
+    )
+
+    ax.plot(
+        pivot_df["date"],
+        trend_wheat(x_numeric),
+        linestyle=":",
+        color="#f2c94c",
+        linewidth=2,
+        label="Wheat Trend"
+    )
+
+    # -------------------------------------------------
+    # Anomaly windows
+    # -------------------------------------------------
+
+    # Merge anomaly months into windows
+    windows = get_contiguous_anomaly_windows(anomaly_dates)
+
+    for start, end in windows:
+
+        ax.axvspan(
+            start,
+            end + pd.DateOffset(months=1),
+            color="red",
+            alpha=0.15
+        )
+
+    # -------------------------------------------------
+    # COVID markers
+    # -------------------------------------------------
+
+    covid_start = pd.Timestamp("2020-03-25")
+    covid_end = pd.Timestamp("2020-06-01")
+
+    ax.axvline(covid_start, linestyle="--", color="red", label="Lockdown Start")
+    ax.axvline(covid_end, linestyle="--", color="red", label="Lockdown End")
+
+    # -------------------------------------------------
+    # Styling
+    # -------------------------------------------------
+
+    ax.set_title("National Allocation Trends (Rice vs Wheat)")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Allocated Quantity (MT)")
+
+    ax.ticklabel_format(style="plain", axis="y")
+    ax.yaxis.set_major_formatter(mticker.StrMethodFormatter("{x:,.0f}"))
+
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+    plt.xticks(rotation=90)
+
+    ax.legend(loc="upper left", bbox_to_anchor=(1,1))
+
+    plt.tight_layout(rect=[0,0,0.85,1])
+
+    ax.grid(True)
+
+    return fig, anomaly_dates
+
+# -------------------------------------------------------------------
+# NATIONAL ANOMALY REPORTING TABLE
+# -------------------------------------------------------------------
+
+def national_anomaly_reporting_table(national_alloc_df, state_threshold=24):
+
+    """
+    Returns a table showing months where the number of
+    states reporting is below the threshold.
+
+    Parameters
+    ----------
+    national_alloc_df : pd.DataFrame
+        National dataframe with columns:
+        ['date','commodity','total_allocated_qty','states_reporting']
+
+    state_threshold : int
+        Minimum expected number of reporting states.
 
     Returns
     -------
     pd.DataFrame
         Columns:
-        - date
-        - rice_allocated
-        - wheat_allocated
-        - total_allocated_qty
+        date, states_reporting
     """
-    monthly = (
-        df.groupby(["date", "commodity"], as_index=False)
-          .agg(total_allocated_qty=("total_allocated_qty", "sum"))
-    )
 
-    pivot = (
-        monthly
-        .pivot(index="date", columns="commodity", values="total_allocated_qty")
+    df = national_alloc_df.copy()
+
+    # Aggregate states reporting per date
+    reporting_df = (
+        df.groupby("date")["states_reporting"]
+        .max()
         .reset_index()
-        .rename(columns={"rice": "rice_allocated", "wheat": "wheat_allocated"})
     )
 
-    pivot["total_allocated_qty"] = (
-        pivot["rice_allocated"].fillna(0) +
-        pivot["wheat_allocated"].fillna(0)
-    )
-
-    return pivot.sort_values("date")
-
-# -------------------------------------------------
-# DOMINANCE CLASSIFICATION CALACULATION
-# -------------------------------------------------
-
-def compute_commodity_dominance(pivot_summary):
-    """
-    Determines whether a region is Rice or Wheat dominant
-    based on total allocation share.
-    """
-    total_sum = pivot_summary["total_allocated_qty"].sum()
-    rice_sum = pivot_summary["rice_allocated"].sum()
-    wheat_sum = pivot_summary["wheat_allocated"].sum()
-
-    if total_sum == 0:
-        return {
-            "label": "No Allocation Data",
-            "rice_share": 0,
-            "wheat_share": 0
-        }
-
-    rice_share = rice_sum / total_sum
-    wheat_share = wheat_sum / total_sum
-
-    if wheat_share > 0.5:
-        label = "Wheat Dominant Region"
-    elif rice_share > 0.5:
-        label = "Rice Dominant Region"
-    else:
-        label = "Balanced Allocation Region"
-
-    return {
-        "label": label,
-        "rice_share": rice_share,
-        "wheat_share": wheat_share
-    }
-
-
-
-# -------------------------------------------------------------------
-# NATIONAL TREND PLOT
-# -------------------------------------------------------------------
-
-def plot_national_allocation(pivot_df):
-    """
-    Plots national allocation trends for rice, wheat, and total.
-
-    Parameters
-    ----------
-    pivot_df : pd.DataFrame
-        Output of get_national_monthly_allocation()
-
-    Returns
-    -------
-    matplotlib.figure.Figure
-    """
-    fig, ax = plt.subplots(figsize=(10, 4))
-
-    ax.plot(
-        pivot_df["date"],
-        pivot_df["total_allocated_qty"],
-        label="Total Allocation",
-        color="black"
-    )
-
-    ax.plot(
-        pivot_df["date"],
-        pivot_df["rice_allocated"],
-        label="Rice Allocation",
-        color="cyan"
-    )
-
-    ax.plot(
-        pivot_df["date"],
-        pivot_df["wheat_allocated"],
-        label="Wheat Allocation",
-        color="lightgreen"
-    )
-    #plt.axvline(pd.Timestamp("2020-03-25"), linestyle="-.", color="red", label="COVID Lockdown")
-    ax.set_title("National Monthly Rice & Wheat Allocation (PDS)")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Allocated Quantity (MT)")
-    ax.legend()
-    ax.grid(True)
-
-    return fig
-
-
-# -------------------------------------------------------------------
-# ZOOMED ANOMALY WINDOW
-# -------------------------------------------------------------------
-
-def get_zoomed_period(pivot_df, start_date, end_date):
-    """
-    Extracts a zoomed time window and computes month-on-month changes.
-
-    Parameters
-    ----------
-    pivot_df : pd.DataFrame
-        Output of get_national_monthly_allocation()
-    start_date : str or pd.Timestamp
-    end_date : str or pd.Timestamp
-
-    Returns
-    -------
-    pd.DataFrame
-        Includes:
-        - mom_change
-        - mom_pct_change
-    """
-    period_df = pivot_df[
-        (pivot_df["date"] >= start_date) &
-        (pivot_df["date"] <= end_date)
+    # Filter anomaly months
+    anomaly_df = reporting_df[
+        reporting_df["states_reporting"] < state_threshold
     ].copy()
 
-    period_df["mom_change"] = period_df["total_allocated_qty"].diff()
-    period_df["mom_pct_change"] = (
-        period_df["total_allocated_qty"].pct_change() * 100
-    )
+    anomaly_df = anomaly_df.sort_values("date")
+    anomaly_df["date"] = anomaly_df["date"].dt.strftime("%b %Y")
 
-    return period_df
-
+    return anomaly_df
 
 # -------------------------------------------------------------------
-# ANOMALY PLOT WITH ANNOTATION
+# COMMODITY DOMINANCE CALCULATOR
 # -------------------------------------------------------------------
 
-def plot_allocation_anomaly(period_df):
+def commodity_dominance_calculator(df):
+
     """
-    Plots zoomed allocation trends and annotates anomalous month
-    (largest negative MoM change).
+    Calculates commodity share distribution and identifies
+    the dominant commodity.
 
     Parameters
     ----------
-    period_df : pd.DataFrame
-        Output of get_zoomed_period()
+    df : pd.DataFrame
+        Dataframe containing:
+        ['commodity', 'total_allocated_qty']
 
     Returns
     -------
-    matplotlib.figure.Figure
+    fig : matplotlib.figure.Figure
+        Pie chart of commodity distribution
+
+    dominant_commodity : str
+        Commodity with highest allocation share
+
+    dominant_share : float
+        Percentage share of dominant commodity
     """
-    fig, ax = plt.subplots(figsize=(10, 4))
 
-    ax.plot(
-        period_df["date"],
-        period_df["total_allocated_qty"],
-        marker="o",
-        label="Total",
-        color="black"
+    data = df.copy()
+
+    # -------------------------------------------------
+    # Aggregate allocations by commodity
+    # -------------------------------------------------
+
+    commodity_totals = (
+        data.groupby("commodity")["total_allocated_qty"]
+        .sum()
+        .reset_index()
     )
 
-    ax.plot(
-        period_df["date"],
-        period_df["rice_allocated"],
-        marker="s",
-        label="Rice",
-        color="cyan"
+    # Clean commodity names
+    commodity_totals["commodity_clean"] = (
+        commodity_totals["commodity"].str.strip().str.title()
     )
 
-    ax.plot(
-        period_df["date"],
-        period_df["wheat_allocated"],
-        marker="s",
-        label="Wheat",
-        color="lightgreen"
+    total_allocation = commodity_totals["total_allocated_qty"].sum()
+
+    commodity_totals["share"] = (
+        commodity_totals["total_allocated_qty"] / total_allocation
     )
 
-    # Identify anomalous month (largest negative MoM)
-    collapse_row = period_df.loc[period_df["mom_change"].idxmin()]
+    # -------------------------------------------------
+    # Determine dominant commodity and share
+    # -------------------------------------------------
 
-    ax.annotate(
-        f"Anomaly: Sharp Decline (Under-Reporting)\n({collapse_row['date'].strftime('%b %Y')})",
-        xy=(collapse_row["date"], collapse_row["total_allocated_qty"]),
-        xytext=(collapse_row["date"], collapse_row["total_allocated_qty"] * 2),
-        arrowprops=dict(arrowstyle="->", color="red"),
-        fontsize=9,
-        color="red",
-        ha="center"
+    dominant_row = commodity_totals.loc[
+        commodity_totals["share"].idxmax()
+    ]
+
+    dominant_commodity = dominant_row["commodity_clean"]
+    dominant_share = dominant_row["share"] * 100
+
+    # -------------------------------------------------
+    # Plot pie chart
+    # -------------------------------------------------
+
+    colors = {
+        "Rice": "#8c7a3b",
+        "Wheat": "#f2c94c"
+    }
+
+    pie_colors = [
+        colors.get(c, "#cccccc")
+        for c in commodity_totals["commodity_clean"]
+    ]
+
+    fig, ax = plt.subplots(figsize=(6,6))
+
+    ax.pie(
+        commodity_totals["total_allocated_qty"],
+        labels=commodity_totals["commodity_clean"],
+        autopct="%1.1f%%",
+        startangle=90,
+        colors=pie_colors,
+        wedgeprops={"edgecolor": "white"}
     )
 
-    ax.set_title("Allocation Anomaly Diagnostic")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Allocated Quantity (MT)")
+    ax.set_title("Commodity Allocation Distribution")
+
+    plt.tight_layout()
+
+    return fig, dominant_commodity, dominant_share
+
+
+# -------------------------------------------------------------------
+# YEAR-WISE STATE ALLOCATION (STACKED BAR)
+# -------------------------------------------------------------------
+
+def plot_yearly_state_allocation(state_df):
+
+    df = state_df.copy()
+
+    df["year"] = df["date"].dt.year
+
+    yearly_df = (
+        df.groupby(["year","commodity"])["total_allocated_qty"]
+        .sum()
+        .reset_index()
+    )
+
+    pivot_df = (
+        yearly_df.pivot(index="year", columns="commodity", values="total_allocated_qty")
+        .fillna(0)
+    )
+
+    pivot_df.columns = [str(c).title() for c in pivot_df.columns]
+
+    for col in ["Rice", "Wheat"]:
+        if col not in pivot_df.columns:
+            pivot_df[col] = 0
+
+    pivot_df = pivot_df[["Rice", "Wheat"]]
+
+    fig, ax = plt.subplots(figsize=(10,5))
+
+    ax.bar(
+        pivot_df.index,
+        pivot_df["Rice"],
+        color="#8c7a3b",
+        label="Rice"
+    )
+
+    ax.bar(
+        pivot_df.index,
+        pivot_df["Wheat"],
+        bottom=pivot_df["Rice"],
+        color="#f2c94c",
+        label="Wheat"
+    )
+
+    for year in pivot_df.index:
+        total = pivot_df.loc[year].sum()
+        ax.text(year, total*1.01, f"{total/1e6:.1f}M", ha="center")
+
+    ax.set_title("Year-wise State Allocation")
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Allocation (MT)")
     ax.legend()
-    ax.grid(True)
+    ax.grid(axis="y")
+
+    plt.tight_layout()
 
     return fig
 
 # -------------------------------------------------------------------
-# ENHANCED NATIONAL TREND WITH ANOMALY WINDOWS
+# BASIC STATE TREND PLOT 
 # -------------------------------------------------------------------
 
-def plot_enhanced_national_trends(pivot_df, anomaly_threshold=0.35):
+def plot_state_allocation(state_df):
 
-    """
-    Plots national allocation trends (Total, Rice, Wheat)
-    over full time period, marks anomaly windows based on
-    large month-on-month percentage change, and highlights
-    COVID lockdown period.
+    df = state_df.copy()
 
-    Parameters
-    ----------
-    pivot_df : pd.DataFrame
-        Output of get_national_monthly_allocation()
+    pivot_df = (
+        df.pivot_table(
+            index="date",
+            columns="commodity",
+            values="total_allocated_qty",
+            aggfunc="sum"
+        )
+        .reset_index()
+    )
 
-    anomaly_threshold : float
-        Absolute MoM percentage change threshold (default 35%)
+    pivot_df.columns = [str(c).lower() for c in pivot_df.columns]
 
-    Returns
-    -------
-    matplotlib.figure.Figure
-    """
+    # Ensure both commodities exist
+    for col in ["rice", "wheat"]:
+        if col not in pivot_df.columns:
+            pivot_df[col] = 0
 
-    df = pivot_df.copy()
+    fig, ax = plt.subplots(figsize=(12,5))
 
-    # -------------------------------------------------
-    # Level-based anomaly detection using Z-score
-    # -------------------------------------------------
+    # Main lines
+    ax.plot(pivot_df["date"], pivot_df["rice"], color="#8c7a3b", label="Rice")
+    ax.plot(pivot_df["date"], pivot_df["wheat"], color="#f2c94c", label="Wheat")
 
-    mean_val = df["total_allocated_qty"].mean()
-    std_val = df["total_allocated_qty"].std()
+    x_numeric = np.arange(len(pivot_df))
 
-    df["z_score"] = (df["total_allocated_qty"] - mean_val) / std_val
-    anomaly_dates = df[
-        df["z_score"].abs() > 2
-    ]["date"]
-
-    initial_window = df[df["date"] < pd.Timestamp("2018-01-01")]["date"]
-
-    anomaly_dates = pd.concat([
-        pd.Series(anomaly_dates),
-        initial_window
-    ]).unique()
-
-
-
-    fig, ax = plt.subplots(figsize=(12, 5))
-
-    # -------------------------------------------------
-    # Plot main series
-    # -------------------------------------------------
-    ax.plot(df["date"], df["total_allocated_qty"], label="Total", color="black")
-    ax.plot(df["date"], df["rice_allocated"], label="Rice", color="cyan")
-    ax.plot(df["date"], df["wheat_allocated"], label="Wheat", color="green")
-
-    # -------------------------------------------------
-    # Shade anomaly windows (single neutral color)
-    # -------------------------------------------------
-    for date in anomaly_dates:
-        ax.axvspan(
-            date,
-            date + pd.DateOffset(months=1),
-            color="red",
-            alpha=0.12
+    # Rice trendline
+    if pivot_df["rice"].sum() > 0:
+        rice_trend = np.poly1d(np.polyfit(x_numeric, pivot_df["rice"], 1))
+        ax.plot(
+            pivot_df["date"],
+            rice_trend(x_numeric),
+            linestyle=":",
+            color="#8c7a3b",
+            label="Rice Trend"
         )
 
-    # -------------------------------------------------
-    # Separate trendlines for Rice and Wheat
-    # -------------------------------------------------
+    # Wheat trendline
+    if pivot_df["wheat"].sum() > 0:
+        wheat_trend = np.poly1d(np.polyfit(x_numeric, pivot_df["wheat"], 1))
+        ax.plot(
+            pivot_df["date"],
+            wheat_trend(x_numeric),
+            linestyle=":",
+            color="#f2c94c",
+            label="Wheat Trend"
+        )
 
-    x_numeric = np.arange(len(df))
-
-    # Rice trend
-    coef_rice = np.polyfit(x_numeric, df["rice_allocated"].values, 1)
-    trend_rice = np.poly1d(coef_rice)
-
-    ax.plot(
-        df["date"],
-        trend_rice(x_numeric),
-        linestyle=":",
-        color="cyan",
-        linewidth=2,
-        label="Rice Trend"
-    )
-
-    # Wheat trend
-    coef_wheat = np.polyfit(x_numeric, df["wheat_allocated"].values, 1)
-    trend_wheat = np.poly1d(coef_wheat)
-
-    ax.plot(
-        df["date"],
-        trend_wheat(x_numeric),
-        linestyle=":",
-        color="green",
-        linewidth=2,
-        label="Wheat Trend"
-    )
-
-
-    # -------------------------------------------------
-    # COVID markers
-    # -------------------------------------------------
-    covid_start = pd.Timestamp("2020-03-01")
-    covid_end = pd.Timestamp("2020-06-01")
-
-    ax.axvline(covid_start, linestyle="--", color="red", label="Lockdown Start")
-    ax.axvline(covid_end, linestyle="--", color="orange", label="Lockdown End")
-
-    # -------------------------------------------------
-    # Final styling
-    # -------------------------------------------------
-    ax.set_title("National Allocation Trends")
+    ax.set_title("State Allocation Trends")
     ax.set_xlabel("Date")
-    ax.set_ylabel("Allocated Quantity (MT)")
-    ax.ticklabel_format(style='plain', axis='y')
-    ax.yaxis.set_major_formatter(mticker.StrMethodFormatter('{x:,.0f}'))
+    ax.set_ylabel("Allocation (MT)")
 
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
     plt.xticks(rotation=90)
 
-    ax.legend(loc="upper left", bbox_to_anchor=(1, 1))
-    # plt.tight_layout()
-    plt.tight_layout(rect=[0, 0, 0.85, 1])
-    ax.grid(True)  
-
-    return fig,anomaly_dates
-
-
-def generate_anomaly_reporting_table(df_diag, anomaly_dates):
-    """
-    Docstring for generate_anomaly_reporting_table
-    
-    :param df_diag: cleaned dataset
-    :param anomaly_dates: dates of anomaly windows
-    """
-
-    records = []
-
-    for anomaly_date in anomaly_dates:
-
-        prev_month = anomaly_date - pd.DateOffset(months=1)
-        next_month = anomaly_date + pd.DateOffset(months=1)
-
-        for month in [prev_month, anomaly_date, next_month]:
-
-            month_data = df_diag[df_diag["date"] == month]
-
-            num_states = month_data["state_name"].nunique()
-
-            records.append({
-                "Month Checked": month,
-                "Number of States that Reported Data": num_states
-            })
-
-    table_df = pd.DataFrame(records)
-
-    # Remove duplicates (important if months overlap between anomaly windows)
-    table_df = table_df.drop_duplicates()
-
-    # Sort ascending by date
-    table_df = table_df.sort_values("Month Checked")
-
-    # Format date for display
-    table_df["Month Checked"] = table_df["Month Checked"].dt.strftime("%b %Y")
-
-    table_df = table_df.reset_index(drop=True)
-
-    return table_df
-
-def plot_state_commodity_trends(df_diag, selected_state):
-
-    # ---------------------------------------------
-    # Filter state-level data
-    # ---------------------------------------------
-    df_state = df_diag[
-        df_diag["state_name"] == selected_state.lower()
-    ]
-
-    # ---------------------------------------------
-    # Monthly aggregation (state-level)
-    # ---------------------------------------------
-    monthly_state = (
-        df_state.groupby(["date", "commodity"], as_index=False)
-        .agg(total_allocated_qty=("total_allocated_qty", "sum"))
-    )
-
-    pivot_state = (
-        monthly_state
-        .pivot(index="date", columns="commodity", values="total_allocated_qty")
-        .reindex(columns=["rice", "wheat"])
-        .fillna(0)
-        .reset_index()
-        .rename(columns={
-            "rice": "rice_allocated",
-            "wheat": "wheat_allocated"
-        })
-    )
-
-    # ---------------------------------------------
-    # Total Allocation for anomaly detection
-    # ---------------------------------------------
-    pivot_state["total_allocated_qty"] = (
-        pivot_state["rice_allocated"] +
-        pivot_state["wheat_allocated"]
-    )
-
-    # ---------------------------------------------
-    # Percentage Change Based Anomaly Detection
-    # ---------------------------------------------
-    pivot_state["pct_change"] = (
-        pivot_state["total_allocated_qty"].pct_change()
-    )
-
-    anomaly_dates = pivot_state[
-        pivot_state["pct_change"].abs() > 0.35
-    ]["date"]
-
-
-    # ---------------------------------------------
-    # Plot
-    # ---------------------------------------------
-    fig, ax = plt.subplots(figsize=(12, 5))
-
-    ax.plot(
-        pivot_state["date"],
-        pivot_state["rice_allocated"],
-        label="Rice",
-        color="cyan"
-    )
-
-    ax.plot(
-        pivot_state["date"],
-        pivot_state["wheat_allocated"],
-        label="Wheat",
-        color="green"
-    )
-
-    # ---------------------------------------------
-    # Shade anomaly windows
-    # ---------------------------------------------
-    for date in anomaly_dates:
-        ax.axvspan(
-            date,
-            date + pd.DateOffset(months=1),
-            color="red",
-            alpha=0.12
-        )
-
-
-    # ---------------------------------------------
-    # Trendlines
-    # ---------------------------------------------
-    x_numeric = np.arange(len(pivot_state))
-
-    # Rice trend
-    coef_rice = np.polyfit(
-        x_numeric,
-        pivot_state["rice_allocated"].values,
-        1
-    )
-    trend_rice = np.poly1d(coef_rice)
-
-    ax.plot(
-        pivot_state["date"],
-        trend_rice(x_numeric),
-        linestyle=":",
-        color="cyan",
-        linewidth=2,
-        label="Rice Trend"
-    )
-
-    # Wheat trend
-    coef_wheat = np.polyfit(
-        x_numeric,
-        pivot_state["wheat_allocated"].values,
-        1
-    )
-    trend_wheat = np.poly1d(coef_wheat)
-
-    ax.plot(
-        pivot_state["date"],
-        trend_wheat(x_numeric),
-        linestyle=":",
-        color="green",
-        linewidth=2,
-        label="Wheat Trend"
-    )
-
-    # ---------------------------------------------
-    # Formatting
-    # ---------------------------------------------
-
-    ax.ticklabel_format(style='plain', axis='y')
-    ax.yaxis.set_major_formatter(
-        mticker.StrMethodFormatter('{x:,.0f}')
-    )
-
-    ax.xaxis.set_major_formatter(
-        mdates.DateFormatter('%b %Y')
-    )
-
-    plt.xticks(rotation=90)
-
-    ax.set_title(f"{selected_state.title()} - Rice & Wheat Allocation Trends")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Allocated Quantity (MT)")
+    ax.legend()
     ax.grid(True)
 
-    ax.legend(loc="upper left", bbox_to_anchor=(1, 1))
-    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.tight_layout()
 
     return fig
+
+# -------------------------------------------------------------------
+# ENHANCED STATE TREND WITH ANOMALY WINDOWS
+# -------------------------------------------------------------------
+
+def plot_enhanced_state_trends(state_df, anomaly_threshold=0.35):
+
+    df = state_df.copy()
+
+    pivot_df = (
+        df.pivot_table(
+            index="date",
+            columns="commodity",
+            values="total_allocated_qty",
+            aggfunc="sum"
+        )
+        .reset_index()
+    )
+
+    pivot_df.columns = [str(c).lower() for c in pivot_df.columns]
+
+    for col in ["rice", "wheat"]:
+        if col not in pivot_df.columns:
+            pivot_df[col] = 0
+
+    pivot_df["total"] = pivot_df["rice"] + pivot_df["wheat"]
+
+    pivot_df["pct_change"] = pivot_df["total"].pct_change().abs()
+
+    anomaly_dates = pivot_df.loc[
+        pivot_df["pct_change"] > anomaly_threshold, "date"
+    ].tolist()
+
+    # contiguous anomaly windows
+    windows = get_contiguous_anomaly_windows(anomaly_dates)
+
+    fig, ax = plt.subplots(figsize=(12,5))
+
+    ax.plot(pivot_df["date"], pivot_df["rice"], color="#8c7a3b", label="Rice")
+    ax.plot(pivot_df["date"], pivot_df["wheat"], color="#f2c94c", label="Wheat")
+
+    x_numeric = np.arange(len(pivot_df))
+
+    if pivot_df["rice"].sum() > 0:
+        rice_trend = np.poly1d(np.polyfit(x_numeric, pivot_df["rice"], 1))
+        ax.plot(pivot_df["date"], rice_trend(x_numeric),
+                linestyle=":", color="#8c7a3b", label="Rice Trend")
+
+    if pivot_df["wheat"].sum() > 0:
+        wheat_trend = np.poly1d(np.polyfit(x_numeric, pivot_df["wheat"], 1))
+        ax.plot(pivot_df["date"], wheat_trend(x_numeric),
+                linestyle=":", color="#f2c94c", label="Wheat Trend")
+
+    # anomaly shading
+    for start, end in windows:
+        ax.axvspan(start, end + pd.DateOffset(months=1), color="red", alpha=0.15)
+
+    # covid markers
+    covid_start = pd.Timestamp("2020-03-25")
+    covid_end = pd.Timestamp("2020-06-01")
+
+    ax.axvline(covid_start, linestyle="--", color="red")
+    ax.axvline(covid_end, linestyle="--", color="red")
+
+    ax.set_title("Enhanced State Allocation Trends")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Allocation (MT)")
+
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+    plt.xticks(rotation=90)
+
+    ax.legend()
+    ax.grid(True)
+
+    plt.tight_layout()
+
+    return fig, anomaly_dates
+
+# -------------------------------------------------------------------
+# STATE ANOMALY REPORTING TABLE
+# -------------------------------------------------------------------
+
+def state_anomaly_reporting_table(state_df, anomaly_threshold=0.35):
+
+    df = state_df.copy()
+
+    pivot_df = (
+        df.pivot_table(
+            index="date",
+            columns="commodity",
+            values="total_allocated_qty",
+            aggfunc="sum"
+        )
+        .reset_index()
+    )
+
+    for col in ["rice", "wheat"]:
+        if col not in pivot_df.columns:
+            pivot_df[col] = 0
+
+    pivot_df.columns = [str(c).lower() for c in pivot_df.columns]
+
+    pivot_df["total"] = pivot_df["rice"] + pivot_df["wheat"]
+
+    pivot_df["pct_change"] = pivot_df["total"].pct_change().abs()
+
+    anomaly_df = pivot_df[pivot_df["pct_change"] > anomaly_threshold].copy()
+
+    anomaly_df["date"] = anomaly_df["date"].dt.strftime("%b %Y")
+
+    table = anomaly_df[
+        ["date","rice","wheat"]
+    ].rename(columns={
+        "date":"Month",
+        "rice":"Rice Allocation",
+        "wheat":"Wheat Allocation"
+    })
+
+    return table.reset_index(drop=True)

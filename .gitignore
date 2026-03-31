@@ -14,14 +14,6 @@ penv/
 venv/
 .env/
 
-# ===============================
-# Data files (DO NOT TRACK)
-# ===============================
-data/raw/
-data/cleaned/
-data/processed/
-*.csv
-*.xlsx
 
 # ===============================
 # OS / system junk
