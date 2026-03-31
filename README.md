@@ -2,6 +2,10 @@
 
 A complete end-to-end data science project analyzing and forecasting Public Distribution System (PDS) foodgrain allocations (Rice & Wheat) across Indian states.
 
+🌐 Live App
+
+👉 https://pds-foodgrain-forecasting-india.streamlit.app/
+
 🚀 Project Overview
 
 This project builds a state-level forecasting system for foodgrain allocation using:
