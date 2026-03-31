@@ -1,12 +1,12 @@
-📊 India PDS Foodgrain Allocation Forecasting
+# 📊 India PDS Foodgrain Allocation Forecasting
 
 A complete end-to-end data science project analyzing and forecasting Public Distribution System (PDS) foodgrain allocations (Rice & Wheat) across Indian states.
 
-🌐 Live App
+# 🌐 Live App
 
 👉 https://pds-foodgrain-forecasting-india.streamlit.app/
 
-🚀 Project Overview
+## 🚀 Project Overview
 
 This project builds a state-level forecasting system for foodgrain allocation using:
 
@@ -15,13 +15,14 @@ Time-series feature engineering
 Machine learning (Random Forest)
 Interactive Streamlit dashboard
 
-🎯 Objectives
+## 🎯 Objectives
 Analyze national and state-level allocation trends
 Detect anomalies in reporting and distribution
 Forecast future allocations (3-month horizon)
 Build a production-ready data pipeline and dashboard
 
-🧱 Project Structure
+## 🧱 Project Structure
+
 pds_foodgrain_forecasting/
 │
 ├── data/
@@ -45,22 +46,24 @@ pds_foodgrain_forecasting/
 │   ├── text_cleaning.py
 │   └── date_utils.py
 │
-├── app.py
+├── streamlit_app/
+│   └── app.py
+│
 └── README.md
 
-🔄 Workflow
-1. Data Cleaning
+## 🔄 Workflow
+### 1. Data Cleaning
 Standardized column names and text fields
 Mapped state names to codes
 Created consistent monthly time index
-2. Exploratory Data Analysis (EDA)
+### 2. Exploratory Data Analysis (EDA)
 Commodity dominance (Rice vs Wheat)
 Year-wise allocation trends
 State-level allocation patterns
 Anomaly detection:
 Missing reporting states
 Sudden allocation changes
-3. Feature Engineering
+### 3. Feature Engineering
 Lag features: lag_1, lag_2, lag_3, lag_6, lag_9, lag_12
 Rolling statistics:
 rolling_mean_3, rolling_mean_6
@@ -69,13 +72,13 @@ Time-series safe preprocessing:
 Full timeline creation
 Forward/backward fill
 Outlier clipping
-4. Machine Learning
+### 4. Machine Learning
 Model: Random Forest Regressor
 State + commodity specific training
 Recursive forecasting for 3 months
-5. Streamlit Dashboard
+### 5. Streamlit Dashboard
 
-📌 Features:
+## 📌 Features:
 National Analysis
 Commodity dominance
 Year-wise allocation
@@ -91,12 +94,12 @@ Choose forecast cutoff date
 Model performance metrics (MAPE, R²)
 Visualization of predictions vs actuals
 
-🧠 Key Design Decisions
+## 🧠 Key Design Decisions
 Lag-based features → captures temporal dependencies
 No imputation of anomalies → preserves real-world signals
 Recursive forecasting → realistic multi-step prediction
 
-📈 Model Features
+## 📈 Model Features
 [
  'lag_1', 'lag_2', 'lag_3',
  'lag_6', 'lag_9', 'lag_12',
@@ -104,25 +107,25 @@ Recursive forecasting → realistic multi-step prediction
  'rolling_std_3'
 ]
 
-⚠️ Constraints & Validations
+## ⚠️ Constraints & Validations
 Minimum 12 months history required (lag_12 constraint)
 Forecast only allowed for valid cutoff dates
 Warning triggered for high volatility regions
 
-🛠️ Tech Stack
+## 🛠️ Tech Stack
 Python
 Pandas, NumPy
 Scikit-learn
 Matplotlib
 Streamlit
 
-▶️ How to Run
+## ▶️ How to Run
 1. Install dependencies
 pip install -r requirements.txt
 2. Run Streamlit app
 streamlit run app.py
 
-📊 Example Use Case
+## 📊 Example Use Case
 Select: Kerala (KL) → Rice
 Choose cutoff: Jan 2021
 Get:
@@ -130,21 +133,21 @@ Feb, Mar, Apr predictions
 Model accuracy metrics
 Visual trend comparison
 
-📌 Key Learnings
+## 📌 Key Learnings
 Handling panel time-series data
 Preventing data leakage in lag features
 Designing modular ML pipelines
 Building production-ready dashboards
 Managing real-world messy datasets
 
-🔮 Future Improvements
+## 🔮 Future Improvements
 Add seasonality features (month encoding)
 Try advanced models (XGBoost, LSTM)
 Add district-level granularity (optional)
 Improve anomaly detection (statistical methods)
 
-👤 Author
+## 👤 Author
 
-Sreelakshmi S
+### Sreelakshmi S
 Aspiring Data Analyst | Data Scientist
 Focused on building real-world, production-ready data projects
