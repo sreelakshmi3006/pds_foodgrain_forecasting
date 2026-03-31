@@ -23,6 +23,7 @@ Build a production-ready data pipeline and dashboard
 
 ## 🧱 Project Structure
 
+```bash
 pds_foodgrain_forecasting/
 │
 ├── data/
@@ -50,6 +51,7 @@ pds_foodgrain_forecasting/
 │   └── app.py
 │
 └── README.md
+```
 
 ## 🔄 Workflow
 ### 1. Data Cleaning
